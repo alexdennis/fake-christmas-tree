@@ -19,11 +19,19 @@ android {
     }
 }
 
+repositories {
+    flatDir {
+        dirs 'libs/aar'
+    }
+}
+
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
+    compile fileTree(dir: 'libs/jar', include: ['*.jar'])
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
     compile 'com.android.support:appcompat-v7:25.0.1'
+    compile (name: 'tango_support_java_lib', ext: 'aar')
+    compile 'org.rajawali3d:rajawali:1.1.668@aar'
     testCompile 'junit:junit:4.12'
 }
