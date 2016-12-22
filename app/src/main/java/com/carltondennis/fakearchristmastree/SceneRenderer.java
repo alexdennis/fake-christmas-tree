@@ -9,6 +9,8 @@ import com.google.atap.tangoservice.TangoPoseData;
 
 import org.rajawali3d.Object3D;
 import org.rajawali3d.lights.DirectionalLight;
+import org.rajawali3d.loader.LoaderOBJ;
+import org.rajawali3d.loader.ParsingException;
 import org.rajawali3d.materials.Material;
 import org.rajawali3d.materials.methods.DiffuseMethod;
 import org.rajawali3d.materials.textures.ATexture;
@@ -16,7 +18,7 @@ import org.rajawali3d.materials.textures.StreamingTexture;
 import org.rajawali3d.materials.textures.Texture;
 import org.rajawali3d.math.Matrix4;
 import org.rajawali3d.math.Quaternion;
-import org.rajawali3d.primitives.Cube;
+import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.ScreenQuad;
 import org.rajawali3d.renderer.Renderer;
 
@@ -27,8 +29,11 @@ import javax.microedition.khronos.opengles.GL10;
  */
 
 public class SceneRenderer extends Renderer {
-    private static final float CUBE_SIDE_LENGTH = 0.2f;
+
     private static final String TAG = SceneRenderer.class.getSimpleName();
+    public static final double MIN_SCALE = 0.0005f;
+    public static final double MAX_SCALE = 0.004f;
+    public static final double SCALE_FACTOR = 0.001f;
 
     private float[] textureCoords0 = new float[]{0.0F, 1.0F, 0.0F, 0.0F, 1.0F, 1.0F, 1.0F, 0.0F};
     private float[] textureCoords270 = new float[]{1.0F, 1.0F, 0.0F, 1.0F, 1.0F, 0.0F, 0.0F, 0.0F};
@@ -44,6 +49,9 @@ public class SceneRenderer extends Renderer {
     private boolean mObjectPoseUpdated = false;
 
     private ScreenQuad mBackgroundQuad;
+
+    private double mObjectScale = 0.003f;
+    private boolean mObjectScaleUpdated = false;
 
     public SceneRenderer(Context context) {
         super(context);
@@ -81,9 +89,9 @@ public class SceneRenderer extends Renderer {
         // Set-up a material: green with application of the light and
         // instructions.
         Material material = new Material();
-        material.setColor(0xff009900);
+
         try {
-            Texture t = new Texture("instructions", R.drawable.instructions);
+            Texture t = new Texture("tree", R.drawable.christmas_tree_diffuse);
             material.addTexture(t);
         } catch (ATexture.TextureException e) {
             e.printStackTrace();
@@ -92,11 +100,24 @@ public class SceneRenderer extends Renderer {
         material.enableLighting(true);
         material.setDiffuseMethod(new DiffuseMethod.Lambert());
 
+        try {
+            LoaderOBJ objParser = new LoaderOBJ(mContext.getResources(), mTextureManager, R.raw.christmas_tree_obj);
+            objParser.parse();
+            mObject = objParser.getParsedObject();
+            mObject.rotate(Vector3.Axis.X, -90f);
+            mObject.setScale(mObjectScale);
+//            mObject = new Plane(.5f, .5f, 1, 1, Vector3.Axis.Z);
+            mObject.setMaterial(material);
+            mObject.setPosition(0, 0, -3);
+            mObject.setColor(getContext().getResources().getColor(R.color.surfaceSelection, null));
+            getCurrentScene().addChild(mObject);
+        } catch(ParsingException e) {
+            e.printStackTrace();
+        }
+
         // Build a Cube and place it initially three meters forward from the origin.
-        mObject = new Cube(CUBE_SIDE_LENGTH);
-        mObject.setMaterial(material);
-        mObject.setPosition(0, 0, -3);
-        getCurrentScene().addChild(mObject);
+//        mObject = new Cube(CUBE_SIDE_LENGTH);
+
     }
 
     /**
@@ -136,11 +157,17 @@ public class SceneRenderer extends Renderer {
                 mObject.setPosition(mObjectTransform.getTranslation());
                 // Note that Rajawali uses left-hand convetion for Quaternions so we need to
                 // specify a quaternion with rotation in the opposite direction.
-                mObject.setOrientation(new Quaternion().fromMatrix(mObjectTransform));
+//                mObject.setOrientation(new Quaternion().fromMatrix(mObjectTransform));
                 // Move it forward by half of the size of the cube to make it
                 // flush with the plane surface.
-                mObject.moveForward(CUBE_SIDE_LENGTH / 2.0f);
+//                mObject.rotate(Vector3.Axis.X, 180f);
+//                mObject.moveForward(CUBE_SIDE_LENGTH / 2.0f);
                 mObjectPoseUpdated = false;
+            }
+
+            if (mObjectScaleUpdated) {
+                mObject.setScale(mObjectScale);
+                mObjectScaleUpdated = false;
             }
         }
 
@@ -154,6 +181,11 @@ public class SceneRenderer extends Renderer {
     public synchronized void updateObjectPose(float[] planeFitTransform) {
         mObjectTransform = new Matrix4(planeFitTransform);
         mObjectPoseUpdated = true;
+    }
+
+    public synchronized void updateObjectScale(double s) {
+        mObjectScale = Math.min(Math.max(MIN_SCALE, mObjectScale + (s * SCALE_FACTOR)), MAX_SCALE);
+        mObjectScaleUpdated = true;
     }
 
     /**

@@ -8,6 +8,7 @@ import android.opengl.Matrix;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.view.MotionEventCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.Display;
@@ -43,6 +44,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     // For all current Tango devices, color camera is in the camera id 0.
     private static final int COLOR_CAMERA_ID = 0;
     private static final int PERMISSION_REQUEST_CAMERA = 1;
+    private static final int STATE_PLACE_TREE = 1;
+    private static final int STATE_SCALE_TREE = 2;
 
     private SurfaceView mSurfaceView;
     private SceneRenderer mRenderer;
@@ -61,6 +64,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
     private int mColorCameraToDisplayAndroidRotation = 0;
     private boolean mPermissionsGranted = false;
+    private int mTouchState = STATE_PLACE_TREE;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,12 +95,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         }
 
 
-        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
 
-            ActivityCompat.requestPermissions(MainActivity.this,
-                    new String[]{Manifest.permission.CAMERA}, PERMISSION_REQUEST_CAMERA);
-        }
     }
 
     @Override
@@ -106,7 +105,12 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
         setAndroidOrientation();
 
-        if (mPermissionsGranted) {
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.CAMERA}, PERMISSION_REQUEST_CAMERA);
+        } else {
             initTango();
         }
     }
@@ -117,7 +121,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         switch (requestCode) {
             case PERMISSION_REQUEST_CAMERA: {
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    mPermissionsGranted = true;
+
+                    Log.d(TAG, "permission granted so next onResume will start Tango");
                 } else {
                     Log.d(TAG, "Unable to launch application without camera permission.");
                     finish();
@@ -422,39 +427,92 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
     @Override
     public boolean onTouch(View view, MotionEvent motionEvent) {
-        if (motionEvent.getAction() == MotionEvent.ACTION_UP) {
-            // Calculate click location in u,v (0;1) coordinates.
-            float u = motionEvent.getX() / view.getWidth();
-            float v = motionEvent.getY() / view.getHeight();
 
-            try {
-                // Fit a plane on the clicked point using the latest poiont cloud data
-                // Synchronize against concurrent access to the RGB timestamp in the OpenGL thread
-                // and a possible service disconnection due to an onPause event.
-                float[] planeFitTransform;
-                synchronized (this) {
-                    planeFitTransform = doFitPlane(u, v, mRgbTimestampGlThread);
+        // Assume in place mode
+        // if two pointers detected then switch to scale mode
+        // if distance between pointers is greater on ACTION_MOVE then scale up
+        // if distance between pointers is less then on ACTION_MOVE scale down
+
+        // Need to store position of pointers on touch in an array so that calculation can happen for move
+        int action = MotionEventCompat.getActionMasked(motionEvent);
+        switch (action) {
+            case MotionEvent.ACTION_POINTER_DOWN:
+                Log.d(TAG, "Changed to scaling");
+                mTouchState = STATE_SCALE_TREE;
+                break;
+            case MotionEvent.ACTION_UP:
+                if (mTouchState == STATE_PLACE_TREE) {
+                    Log.d(TAG, "Placing the tree");
+                    placeTree(view, motionEvent);
+                } else {
+                    Log.d(TAG, "Changing state to placing");
+                    mTouchState = STATE_PLACE_TREE;
                 }
+                break;
+            case MotionEvent.ACTION_MOVE:
+                if (mTouchState == STATE_SCALE_TREE && motionEvent.getPointerCount() > 1) {
+                    // Find distance between points
+                    try {
+                        float x0 = motionEvent.getHistoricalX(0, 0);
+                        float x1 = motionEvent.getHistoricalX(1, 0);
+                        float y0 = motionEvent.getHistoricalY(0, 0);
+                        float y1 = motionEvent.getHistoricalY(1, 0);
+                        double dist0 = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
 
-                if (planeFitTransform != null) {
-                    // Update the position of the rendered cube to the pose of the detected plane
-                    // This update is made thread safe by the renderer
-                    mRenderer.updateObjectPose(planeFitTransform);
+                        x0 = motionEvent.getX(0);
+                        x1 = motionEvent.getX(1);
+                        y0 = motionEvent.getY(0);
+                        y1 = motionEvent.getY(1);
+                        double dist1 = Math.sqrt(Math.pow(x1 - x0, 2) + Math.pow(y1 - y0, 2));
+
+                        Log.d(TAG, String.format("Distance changed from %.2f to %.2f", dist0, dist1));
+
+                        double scale = (dist1 - dist0) / dist0;
+
+                        Log.d(TAG, String.format("Scaled changed by %.2f", scale));
+
+                        // Update tree scale
+                        mRenderer.updateObjectScale(scale);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
-
-            } catch (TangoException t) {
-                Toast.makeText(getApplicationContext(),
-                        R.string.failed_measurement,
-                        Toast.LENGTH_SHORT).show();
-                Log.e(TAG, getString(R.string.failed_measurement), t);
-            } catch (SecurityException t) {
-                Toast.makeText(getApplicationContext(),
-                        R.string.failed_permissions,
-                        Toast.LENGTH_SHORT).show();
-                Log.e(TAG, getString(R.string.failed_permissions), t);
-            }
         }
+
         return true;
+    }
+
+    private void placeTree(View view, MotionEvent motionEvent) {
+        // Calculate click location in u,v (0;1) coordinates.
+        float u = motionEvent.getX() / view.getWidth();
+        float v = motionEvent.getY() / view.getHeight();
+
+        try {
+            // Fit a plane on the clicked point using the latest poiont cloud data
+            // Synchronize against concurrent access to the RGB timestamp in the OpenGL thread
+            // and a possible service disconnection due to an onPause event.
+            float[] planeFitTransform;
+            synchronized (this) {
+                planeFitTransform = doFitPlane(u, v, mRgbTimestampGlThread);
+            }
+
+            if (planeFitTransform != null) {
+                // Update the position of the rendered cube to the pose of the detected plane
+                // This update is made thread safe by the renderer
+                mRenderer.updateObjectPose(planeFitTransform);
+            }
+
+        } catch (TangoException t) {
+            Toast.makeText(getApplicationContext(),
+                    R.string.failed_measurement,
+                    Toast.LENGTH_SHORT).show();
+            Log.e(TAG, getString(R.string.failed_measurement), t);
+        } catch (SecurityException t) {
+            Toast.makeText(getApplicationContext(),
+                    R.string.failed_permissions,
+                    Toast.LENGTH_SHORT).show();
+            Log.e(TAG, getString(R.string.failed_permissions), t);
+        }
     }
 
     /**
