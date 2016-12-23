@@ -12,3 +12,7 @@ decorate
 * Once the have the perfect spot they can get a tree model dropped in at that spot
 * After the tree is set, they can proceed to decorate it with a box of ornaments
 * When they are done, they can take a photo and share it social media
+
+# Acknolegdement
+
+* Christmas Tree model (https://www.assetstore.unity3d.com/en/#!/content/75403)

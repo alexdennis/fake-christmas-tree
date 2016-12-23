@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">FakeARChristmasTree</string>
+    <string name="app_name">Fake Christmas Tree</string>
     <string name="exception_out_of_date">"Tango service outdated!"</string>
     <string name="exception_tango_error">"Tango exception!"</string>
     <string name="exception_tango_invalid">"Tango invalid exception! Try again!"</string>

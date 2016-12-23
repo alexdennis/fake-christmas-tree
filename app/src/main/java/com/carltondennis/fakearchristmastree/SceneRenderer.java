@@ -82,8 +82,8 @@ public class SceneRenderer extends Renderer {
         // Add a directional light in an arbitrary direction.
         DirectionalLight light = new DirectionalLight(1, 0.2, -1);
         light.setColor(1, 1, 1);
-        light.setPower(0.8f);
-        light.setPosition(3, 2, 4);
+        light.setPower(2.5f);
+        light.setPosition(3, 3, 4);
         getCurrentScene().addLight(light);
 
         // Set-up a material: green with application of the light and
@@ -105,6 +105,7 @@ public class SceneRenderer extends Renderer {
             objParser.parse();
             mObject = objParser.getParsedObject();
             mObject.rotate(Vector3.Axis.X, -90f);
+            mObject.rotate(Vector3.Axis.Y, 180f);
             mObject.setScale(mObjectScale);
 //            mObject = new Plane(.5f, .5f, 1, 1, Vector3.Axis.Z);
             mObject.setMaterial(material);
