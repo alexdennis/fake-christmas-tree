@@ -13,6 +13,6 @@ The idea behind Fake AR Christmas Tree is that a cash or time constrained indivi
 * Add Camera feature to snap a shot of the scene and provide share feature to export out of the app
 * Allow swaping of tree model with appropriate navigation
 
-# Acknolegdement
+# Acknowledgement
 * Code adapted from Tango sample (https://github.com/googlesamples/tango-examples-java/tree/master/java_plane_fitting_example)
 * Christmas Tree model (https://www.assetstore.unity3d.com/en/#!/content/75403)
