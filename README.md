@@ -1,18 +1,18 @@
 # Overview
-
-The idea behind Fake AR Christmas Tree is that a cheap person,
-or otherwise time constrained, can get a "fake" virtual tree in their living room that they can
-decorate
-
+The idea behind Fake AR Christmas Tree is that a cash or time constrained individual, can still participate in the festivities with a "fake" virtual tree to place in any space they want.
 
 # Experience
+* When user opens the app they will see a floating Christmas tree
+* User taps a surface to place the Christmas tree
+* User uses two finger gesture to scale Christmas tree
 
-* User opens the app and chooses a location to drop a the tree
-* The user will see a blue square if a surface is detected or then can try detecting a surface by tapping a location
-* Once the have the perfect spot they can get a tree model dropped in at that spot
-* After the tree is set, they can proceed to decorate it with a box of ornaments
-* When they are done, they can take a photo and share it social media
+# TODO
+* Add Tango UI to allow user to know when Tango is working to find surfaces
+* Add instructions
+* Add UI controls for placement and scaling
+* Add Camera feature to snap a shot of the scene and provide share feature to export out of the app
+* Allow swaping of tree model with appropriate navigation
 
 # Acknolegdement
-
+* Code adapted from Tango sample (https://github.com/googlesamples/tango-examples-java/tree/master/java_plane_fitting_example)
 * Christmas Tree model (https://www.assetstore.unity3d.com/en/#!/content/75403)
