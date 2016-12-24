@@ -32,6 +32,7 @@ dependencies {
     })
     compile 'com.android.support:appcompat-v7:25.0.1'
     compile (name: 'tango_support_java_lib', ext: 'aar')
+    compile (name: 'tango-ux-support-library', ext: 'aar')
     compile 'org.rajawali3d:rajawali:1.1.668@aar'
     testCompile 'junit:junit:4.12'
 }

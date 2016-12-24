@@ -17,6 +17,8 @@ import android.view.Surface;
 import android.view.View;
 import android.widget.Toast;
 
+import com.google.atap.tango.ux.TangoUx;
+import com.google.atap.tango.ux.TangoUxLayout;
 import com.google.atap.tangoservice.Tango;
 import com.google.atap.tangoservice.TangoCameraIntrinsics;
 import com.google.atap.tangoservice.TangoConfig;
@@ -52,7 +54,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private TangoCameraIntrinsics mIntrinsics;
     private TangoPointCloudManager mPointCloudManager;
     private Tango mTango;
+    private TangoUx mTangoUx;
     private TangoConfig mConfig;
+    private TangoUxLayout mTangoUxLayout;
     private boolean mIsConnected = false;
     private double mCameraPoseTimestamp = 0;
 
@@ -69,12 +73,20 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        mSurfaceView = new SurfaceView(this);
+        setContentView(R.layout.activity_main);
+
+        mSurfaceView = (SurfaceView) findViewById(R.id.surfaceview);
+
         mRenderer = new SceneRenderer(this);
         mSurfaceView.setSurfaceRenderer(mRenderer);
+
         mSurfaceView.setOnTouchListener(this);
+
         mPointCloudManager = new TangoPointCloudManager();
-        setContentView(mSurfaceView);
+
+        mTangoUx = new TangoUx(this);
+        mTangoUxLayout = (TangoUxLayout) findViewById(R.id.layout_tango_ux);
+        mTangoUx.setLayout(mTangoUxLayout);
 
         DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         if (displayManager != null) {
@@ -93,8 +105,6 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 public void onDisplayRemoved(int displayId) {}
             }, null);
         }
-
-
 
     }
 
@@ -147,6 +157,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 synchronized (MainActivity.this) {
                     try {
                         TangoSupport.initialize();
+                        TangoUx.StartParams params = new TangoUx.StartParams();
+//                        params.showConnectionScreen = false;
+                        mTangoUx.start(params);
                         mConfig = setupTangoConfig(mTango);
                         mTango.connect(mConfig);
                         startupTango();
@@ -154,6 +167,10 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                         mIsConnected = true;
                     } catch (TangoOutOfDateException e) {
                         Log.e(TAG, getString(R.string.exception_out_of_date), e);
+
+                        if (mTangoUx != null) {
+                            mTangoUx.showTangoOutOfDate();
+                        }
                     } catch (TangoErrorException e) {
                         Log.e(TAG, getString(R.string.exception_tango_error), e);
                     } catch (TangoInvalidException e) {
@@ -185,6 +202,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                     // in the OpenGL thread after resume
                     mConnectedTextureIdGlThread = INVALID_TEXTURE_ID;
                     mTango.disconnect();
+                    mTangoUx.stop();
                 }
                 mIsConnected = false;
             } catch (TangoErrorException e) {
@@ -243,7 +261,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             @Override
             public void onXyzIjAvailable(TangoXyzIjData xyzIj) {
-                // We are not using onXyzIjAvailable for this app.
+                if (mTangoUx != null) {
+                    mTangoUx.updateXyzCount(xyzIj.xyzCount);
+                }
             }
 
             @Override
@@ -254,7 +274,9 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
             @Override
             public void onTangoEvent(TangoEvent event) {
-                // We are not using OnPoseAvailable for this app.
+                if (mTangoUx != null) {
+                    mTangoUx.updateTangoEvent(event);
+                }
             }
         });
 
@@ -323,6 +345,11 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                                     TangoPoseData.COORDINATE_FRAME_CAMERA_COLOR,
                                     TangoSupport.TANGO_SUPPORT_ENGINE_OPENGL,
                                     mColorCameraToDisplayAndroidRotation);
+
+                            if (mTangoUx != null) {
+                                mTangoUx.updatePoseStatus(lastFramePose.statusCode);
+                            }
+
                             if (lastFramePose.statusCode == TangoPoseData.POSE_VALID) {
                                 // Update the camera pose from the renderer
                                 mRenderer.updateRenderCameraPose(lastFramePose);
