@@ -5,4 +5,5 @@
     <string name="exception_tango_invalid">"Tango invalid exception! Try again!"</string>
     <string name="failed_measurement">Failed to fit plane</string>
     <string name="failed_permissions">Permissions required!</string>
+    <string name="place_tree">Tap a flat surface to place your tree. \n\n After placing the tree you can reposition or use two fingers to scale.</string>
 </resources>

@@ -15,6 +15,7 @@ import android.view.Display;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.atap.tango.ux.TangoUx;
@@ -50,13 +51,14 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private static final int STATE_SCALE_TREE = 2;
 
     private SurfaceView mSurfaceView;
+    private TextView mInstructions;
+
     private SceneRenderer mRenderer;
     private TangoCameraIntrinsics mIntrinsics;
     private TangoPointCloudManager mPointCloudManager;
     private Tango mTango;
     private TangoUx mTangoUx;
     private TangoConfig mConfig;
-    private TangoUxLayout mTangoUxLayout;
     private boolean mIsConnected = false;
     private double mCameraPoseTimestamp = 0;
 
@@ -69,6 +71,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     private int mColorCameraToDisplayAndroidRotation = 0;
     private boolean mPermissionsGranted = false;
     private int mTouchState = STATE_PLACE_TREE;
+    private boolean mIsTreePlaced = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,6 +79,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         setContentView(R.layout.activity_main);
 
         mSurfaceView = (SurfaceView) findViewById(R.id.surfaceview);
+        mInstructions = (TextView) findViewById(R.id.instructions);
 
         mRenderer = new SceneRenderer(this);
         mSurfaceView.setSurfaceRenderer(mRenderer);
@@ -85,8 +89,8 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         mPointCloudManager = new TangoPointCloudManager();
 
         mTangoUx = new TangoUx(this);
-        mTangoUxLayout = (TangoUxLayout) findViewById(R.id.layout_tango_ux);
-        mTangoUx.setLayout(mTangoUxLayout);
+        TangoUxLayout tangoUxLayout = (TangoUxLayout) findViewById(R.id.layout_tango_ux);
+        mTangoUx.setLayout(tangoUxLayout);
 
         DisplayManager displayManager = (DisplayManager) getSystemService(DISPLAY_SERVICE);
         if (displayManager != null) {
@@ -354,6 +358,11 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                                 // Update the camera pose from the renderer
                                 mRenderer.updateRenderCameraPose(lastFramePose);
                                 mCameraPoseTimestamp = lastFramePose.timestamp;
+
+                                // We have not placed a tree yet so show the instructions
+                                if (mIsTreePlaced == false && mInstructions.getVisibility() == View.INVISIBLE) {
+                                    mInstructions.setVisibility(View.VISIBLE);
+                                }
                             } else {
                                 // When the pose status is not valid, it indicates the tracking has
                                 // been lost. In this case, we simply stop rendering.
@@ -527,6 +536,12 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 // Update the position of the rendered cube to the pose of the detected plane
                 // This update is made thread safe by the renderer
                 mRenderer.updateObjectPose(planeFitTransform);
+
+                // Now that we have placed the tree hide the instructions.
+                if (mIsTreePlaced == false) {
+                    mInstructions.setVisibility(View.INVISIBLE);
+                    mIsTreePlaced = true;
+                }
             }
 
         } catch (TangoException t) {
