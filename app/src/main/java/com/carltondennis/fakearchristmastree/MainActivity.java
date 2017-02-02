@@ -1,11 +1,22 @@
 package com.carltondennis.fakearchristmastree;
 
 import android.Manifest;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.AnimatorSet;
+import android.animation.ObjectAnimator;
+import android.content.ContentValues;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.hardware.Camera;
 import android.hardware.display.DisplayManager;
+import android.media.MediaActionSound;
 import android.opengl.Matrix;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
+import android.support.design.widget.FloatingActionButton;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.view.MotionEventCompat;
@@ -15,6 +26,9 @@ import android.view.Display;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -38,20 +52,26 @@ import com.projecttango.tangosupport.TangoSupport;
 import org.rajawali3d.scene.ASceneFrameCallback;
 import org.rajawali3d.view.SurfaceView;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class MainActivity extends AppCompatActivity implements View.OnTouchListener {
+public class MainActivity extends AppCompatActivity implements View.OnTouchListener, SceneRenderer.ScreenshotCallback {
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final int INVALID_TEXTURE_ID = 0;
     // For all current Tango devices, color camera is in the camera id 0.
     private static final int COLOR_CAMERA_ID = 0;
-    private static final int PERMISSION_REQUEST_CAMERA = 1;
+    private static final int PERMISSION_REQUEST = 1;
     private static final int STATE_PLACE_TREE = 1;
     private static final int STATE_SCALE_TREE = 2;
 
     private SurfaceView mSurfaceView;
     private TextView mInstructions;
+    private FrameLayout mPanelFlash;
+    private FloatingActionButton mCameraButton;
 
     private SceneRenderer mRenderer;
     private TangoCameraIntrinsics mIntrinsics;
@@ -80,8 +100,10 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
 
         mSurfaceView = (SurfaceView) findViewById(R.id.surfaceview);
         mInstructions = (TextView) findViewById(R.id.instructions);
+        mPanelFlash = (FrameLayout) findViewById(R.id.panel_flash);
+        mCameraButton = (FloatingActionButton) findViewById(R.id.btn_screenshot);
 
-        mRenderer = new SceneRenderer(this);
+        mRenderer = new SceneRenderer(this, this);
         mSurfaceView.setSurfaceRenderer(mRenderer);
 
         mSurfaceView.setOnTouchListener(this);
@@ -120,10 +142,11 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         setAndroidOrientation();
 
         if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED || ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
 
             ActivityCompat.requestPermissions(MainActivity.this,
-                    new String[]{Manifest.permission.CAMERA}, PERMISSION_REQUEST_CAMERA);
+                    new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}, PERMISSION_REQUEST);
         } else {
             initTango();
         }
@@ -133,14 +156,17 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
     public void onRequestPermissionsResult(int requestCode,
                                            String permissions[], int[] grantResults) {
         switch (requestCode) {
-            case PERMISSION_REQUEST_CAMERA: {
-                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-
-                    Log.d(TAG, "permission granted so next onResume will start Tango");
-                } else {
-                    Log.d(TAG, "Unable to launch application without camera permission.");
-                    finish();
+            case PERMISSION_REQUEST: {
+                if (grantResults.length > 0) {
+                    for (int i = 0; i < grantResults.length; i++) {
+                        if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                            Log.d(TAG, "Unable to launch application without camera permission.");
+                            finish();
+                        }
+                    }
                 }
+
+                Log.d(TAG, "permission granted so next onResume will start Tango");
             }
         }
     }
@@ -354,15 +380,17 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                                 mTangoUx.updatePoseStatus(lastFramePose.statusCode);
                             }
 
+                            // We have not placed a tree yet so show the instructions
+                            if (mIsTreePlaced == false && mInstructions.getVisibility() == View.INVISIBLE) {
+                                mInstructions.setVisibility(View.VISIBLE);
+                                mCameraButton.setVisibility(View.INVISIBLE);
+                            }
+
                             if (lastFramePose.statusCode == TangoPoseData.POSE_VALID) {
                                 // Update the camera pose from the renderer
                                 mRenderer.updateRenderCameraPose(lastFramePose);
                                 mCameraPoseTimestamp = lastFramePose.timestamp;
 
-                                // We have not placed a tree yet so show the instructions
-                                if (mIsTreePlaced == false && mInstructions.getVisibility() == View.INVISIBLE) {
-                                    mInstructions.setVisibility(View.VISIBLE);
-                                }
                             } else {
                                 // When the pose status is not valid, it indicates the tracking has
                                 // been lost. In this case, we simply stop rendering.
@@ -540,6 +568,7 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
                 // Now that we have placed the tree hide the instructions.
                 if (mIsTreePlaced == false) {
                     mInstructions.setVisibility(View.INVISIBLE);
+                    mCameraButton.setVisibility(View.VISIBLE);
                     mIsTreePlaced = true;
                 }
             }
@@ -730,5 +759,124 @@ public class MainActivity extends AppCompatActivity implements View.OnTouchListe
         result[1] = v1[2] * v2[0] - v2[2] * v1[0];
         result[2] = v1[0] * v2[1] - v2[0] * v1[1];
         return result;
+    }
+
+    public void takeScreenshot(View view) {
+        mRenderer.takeScreenshot();
+    }
+
+    @Override
+    public void onScreenshotTaken(final Bitmap screenshotBitmap) {
+        // Give immediate feedback to the user.
+        MediaActionSound sound = new MediaActionSound();
+        sound.play(MediaActionSound.SHUTTER_CLICK);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                mPanelFlash.setVisibility(View.VISIBLE);
+                // Run a fade in and out animation of a white screen.
+                ObjectAnimator fadeIn =
+                        ObjectAnimator.ofFloat(mPanelFlash, View.ALPHA, 0, 1);
+                fadeIn.setDuration(100);
+                fadeIn.setInterpolator(new DecelerateInterpolator());
+                ObjectAnimator fadeOut =
+                        ObjectAnimator.ofFloat(mPanelFlash, View.ALPHA, 1, 0);
+                fadeOut.setInterpolator(new AccelerateInterpolator());
+                fadeOut.setDuration(100);
+
+                AnimatorSet animation = new AnimatorSet();
+                animation.playSequentially(fadeIn, fadeOut);
+                animation.addListener(new AnimatorListenerAdapter() {
+                    @Override
+                    public void onAnimationEnd(Animator animation) {
+                        mPanelFlash.setVisibility(View.GONE);
+                    }
+                });
+                animation.start();
+            }
+        });
+        // Save bitmap to gallery in background.
+        new BitmapSaverTask(screenshotBitmap).execute();
+    }
+
+    /**
+     * Internal AsyncTask that saves a given Bitmap.
+     */
+    private class BitmapSaverTask extends AsyncTask<Void, Void, Boolean> {
+        private Bitmap mBitmap;
+
+        BitmapSaverTask(Bitmap bitmap) {
+            mBitmap = bitmap;
+        }
+
+        @Override
+        protected Boolean doInBackground(Void... params) {
+            try {
+                File bitmapFile = getNewFileForBitmap();
+                saveBitmap(bitmapFile, mBitmap);
+                addScreenshotToGallery(bitmapFile);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Boolean result) {
+            if (result != null) {
+                Toast.makeText(MainActivity.this, "Screenshot saved to gallery",
+                        Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(MainActivity.this, "Screenshot could not be saved",
+                        Toast.LENGTH_LONG).show();
+            }
+        }
+
+        /**
+         * returns a new bitmap File. This is a random generated filename.
+         *
+         * @return File
+         * @throws IOException
+         */
+        private File getNewFileForBitmap() throws IOException {
+            File bmpFile = null;
+            Random rn = new Random();
+            boolean validPath = false;
+            while (!validPath) {
+                String fileId = String.valueOf(rn.nextInt());
+                bmpFile = new File(Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_PICTURES), "FakeArTree" + fileId + ".png");
+                Log.d(TAG, "Screenshot directory " + bmpFile.getAbsolutePath());
+                validPath = !bmpFile.exists();
+            }
+            bmpFile.createNewFile();
+            return bmpFile;
+        }
+
+        /**
+         * Saves the given bitmap to disk (as a PNG file).
+         *
+         * @param localFile
+         * @param bmp
+         * @throws IOException
+         */
+        private void saveBitmap(File localFile, Bitmap bmp) throws IOException {
+            FileOutputStream fos = new FileOutputStream(localFile);
+            bmp.compress(Bitmap.CompressFormat.PNG, 90, fos);
+            fos.close();
+        }
+
+        /**
+         * Adds a file to the Android gallery.
+         */
+        private void addScreenshotToGallery(File localFile) throws IOException {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DATE_TAKEN, System.currentTimeMillis());
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+            Log.d(TAG, localFile.getCanonicalPath());
+            values.put(MediaStore.MediaColumns.DATA, localFile.getCanonicalPath());
+            MainActivity.this.getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        }
     }
 }

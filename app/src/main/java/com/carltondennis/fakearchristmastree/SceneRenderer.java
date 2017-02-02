@@ -1,6 +1,9 @@
 package com.carltondennis.fakearchristmastree;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.opengl.GLES20;
+import android.opengl.GLException;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
@@ -22,6 +25,8 @@ import org.rajawali3d.math.vector.Vector3;
 import org.rajawali3d.primitives.ScreenQuad;
 import org.rajawali3d.renderer.Renderer;
 
+import java.nio.IntBuffer;
+
 import javax.microedition.khronos.opengles.GL10;
 
 /**
@@ -31,6 +36,15 @@ import javax.microedition.khronos.opengles.GL10;
 public class SceneRenderer extends Renderer {
 
     private static final String TAG = SceneRenderer.class.getSimpleName();
+    private boolean mTakeScreenshot = false;
+
+    public interface ScreenshotCallback {
+
+        void onScreenshotTaken(Bitmap screenshot);
+    }
+
+    private ScreenshotCallback mScreenshotCallback;
+
     public static final double MIN_SCALE = 0.0005f;
     public static final double MAX_SCALE = 0.004f;
     public static final double SCALE_FACTOR = 0.001f;
@@ -53,8 +67,9 @@ public class SceneRenderer extends Renderer {
     private double mObjectScale = 0.003f;
     private boolean mObjectScaleUpdated = false;
 
-    public SceneRenderer(Context context) {
+    public SceneRenderer(Context context, ScreenshotCallback callback) {
         super(context);
+        mScreenshotCallback = callback;
     }
 
     @Override
@@ -170,6 +185,14 @@ public class SceneRenderer extends Renderer {
                 mObject.setScale(mObjectScale);
                 mObjectScaleUpdated = false;
             }
+
+            // Take screenshot if needed.
+            if (mTakeScreenshot) {
+                mTakeScreenshot = false;
+                Bitmap screenshot = createBitmapFromGLSurface(0, 0, mDefaultViewportWidth,
+                        mDefaultViewportHeight);
+                mScreenshotCallback.onScreenshotTaken(screenshot);
+            }
         }
 
         super.onRender(elapsedRealTime, deltaTime);
@@ -246,5 +269,46 @@ public class SceneRenderer extends Renderer {
     @Override
     public void onTouchEvent(MotionEvent event) {
 
+    }
+
+    public void takeScreenshot() {
+        mTakeScreenshot = true;
+    }
+
+    /**
+     * Read pixels from buffer to make a bitmap.
+     *
+     * @throws RuntimeException if there is a GLException.
+     * @trhows OutOfMemoryError
+     */
+    private Bitmap createBitmapFromGLSurface(int x, int y, int w, int h) throws OutOfMemoryError {
+        int bitmapBuffer[] = new int[w * h];
+        int bitmapSource[] = new int[w * h];
+        IntBuffer intBuffer = IntBuffer.wrap(bitmapBuffer);
+        intBuffer.position(0);
+
+        try {
+            GLES20.glReadPixels(x, y, w, h, GL10.GL_RGBA, GL10.GL_UNSIGNED_BYTE, intBuffer);
+            // Transformation needed from RGBA to ARGB due to different formats used by OpenGL
+            // and Android.
+            int offset1, offset2;
+            for (int i = 0; i < h; i++) {
+                offset1 = i * w;
+                offset2 = (h - i - 1) * w;
+                for (int j = 0; j < w; j++) {
+                    int texturePixel = bitmapBuffer[offset1 + j];
+                    int red = (texturePixel << 16) & 0x00ff0000;
+                    int green = texturePixel & 0x0000ff00;
+                    int blue = (texturePixel >> 16) & 0xff;
+                    int alpha = texturePixel & 0xff000000;
+                    int pixel = alpha | red | green | blue;
+                    bitmapSource[offset2 + j] = pixel;
+                }
+            }
+        } catch (GLException e) {
+            Log.e(TAG, "Error while creating bitmap from GLSurface.");
+            throw new RuntimeException(e);
+        }
+        return Bitmap.createBitmap(bitmapSource, w, h, Bitmap.Config.ARGB_8888);
     }
 }
