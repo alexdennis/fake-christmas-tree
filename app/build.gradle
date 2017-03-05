@@ -18,8 +18,8 @@ android {
         applicationId "com.carltondennis.fakearchristmastree"
         minSdkVersion 23
         targetSdkVersion 25
-        versionCode 2
-        versionName "1.1"
+        versionCode 4
+        versionName "1.3"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
     buildTypes {
@@ -42,10 +42,10 @@ dependencies {
     androidTestCompile('com.android.support.test.espresso:espresso-core:2.2.2', {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
-    compile 'com.android.support:appcompat-v7:25.1.1'
-    compile 'com.android.support:design:25.1.1'
-    compile (name: 'tango_support_java_lib', ext: 'aar')
-    compile (name: 'tango-ux-support-library', ext: 'aar')
+    compile 'com.android.support:appcompat-v7:25.2.0'
+    compile 'com.android.support:design:25.2.0'
+    compile (name: 'TangoSupport_Eisa_Java', ext: 'aar')
+    compile (name: 'TangoUX_Eisa_Java', ext: 'aar')
     compile 'org.rajawali3d:rajawali:1.1.668@aar'
     testCompile 'junit:junit:4.12'
 }
